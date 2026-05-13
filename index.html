@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>FitCalc Pro</title>
+    <title>FitCalc App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root { --bg: #0f1012; --card: #1c1e22; --accent: #2ecc71; --text: #ffffff; --text-sec: #94a3b8; --danger: #ef4444; }
@@ -11,7 +11,17 @@
         body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 16px; line-height: 1.5; }
         .hidden { display: none !important; }
         
-        /* Карточки и элементы */
+        /* Экраны и навигация */
+        .screen { display: none; padding-bottom: 80px; animation: fadeIn 0.2s ease; }
+        .screen.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--card); display: flex; justify-content: space-around; padding: 10px 0; padding-bottom: calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid #2d3139; z-index: 50; }
+        .nav-item { text-align: center; color: var(--text-sec); cursor: pointer; flex: 1; font-size: 11px; font-weight: 500; transition: color 0.2s; }
+        .nav-item.active { color: var(--accent); }
+        .nav-icon { font-size: 22px; display: block; margin-bottom: 4px; }
+
+        /* Карточки */
         .card { background: var(--card); padding: 20px; border-radius: 20px; margin-bottom: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
         .stats-grid { display: flex; justify-content: space-between; margin-top: 15px; border-top: 1px solid #2d3139; padding-top: 15px; }
         .stat-item { text-align: center; }
@@ -22,10 +32,6 @@
         .progress-container { background: #2d3139; height: 8px; border-radius: 4px; overflow: hidden; margin: 10px 0; }
         .progress-fill { background: var(--accent); height: 100%; width: 0%; transition: width 0.5s ease; }
 
-        /* Управление датами */
-        .date-control { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 0 10px; }
-        .date-btn { background: #2d3139; border: none; color: white; padding: 8px 12px; border-radius: 10px; cursor: pointer; }
-
         /* Список блюд */
         .meal-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #2d3139; }
         .meal-item:last-child { border-bottom: none; }
@@ -35,11 +41,11 @@
         .btn-del { color: var(--danger); font-size: 18px; cursor: pointer; padding: 5px; }
 
         /* Формы и кнопки */
-        input { width: 100%; padding: 12px; margin-bottom: 12px; background: #2d3139; border: 1px solid #3e4451; color: white; border-radius: 12px; font-size: 16px; outline: none; }
+        input { width: 100%; padding: 14px; margin-bottom: 12px; background: #2d3139; border: 1px solid #3e4451; color: white; border-radius: 12px; font-size: 16px; outline: none; }
+        input[type="date"] { color-scheme: dark; }
         input:focus { border-color: var(--accent); }
-        .btn-main { width: 100%; padding: 16px; background: var(--accent); color: #000; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.1s; }
-        .btn-main:active { transform: scale(0.98); }
-        .fab { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; box-shadow: 0 5px 20px rgba(46, 204, 113, 0.4); border: none; cursor: pointer; }
+        .btn-main { width: 100%; padding: 16px; background: var(--accent); color: #000; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; }
+        .fab { position: fixed; bottom: 85px; right: 20px; width: 60px; height: 60px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; color: #000; box-shadow: 0 5px 20px rgba(46, 204, 113, 0.4); border: none; cursor: pointer; z-index: 40; }
 
         /* Модалка */
         .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: flex-end; z-index: 1000; }
@@ -49,23 +55,13 @@
 </head>
 <body>
 
-    <div id="app">
-        <!-- УПРАВЛЕНИЕ ДАТОЙ -->
-        <div class="date-control">
-            <button class="date-btn" onclick="changeDate(-1)">←</button>
-            <b id="currentDateLabel">Сегодня</b>
-            <button class="date-btn" onclick="changeDate(1)">→</button>
-        </div>
-
-        <!-- ГЛАВНАЯ КАРТОЧКА -->
-        <div class="card" onclick="openSettings()">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <div>
-                    <span style="color: var(--text-sec); font-size: 13px;">Потреблено ккал</span>
-                    <div style="font-size: 32px; font-weight: 800;"><span id="curCal">0</span> <span style="font-size: 18px; color: var(--text-sec);">/ <span id="maxCal">2100</span></span></div>
-                </div>
-                <div style="font-size: 24px;">⚙️</div>
-            </div>
+    <!-- ЭКРАН 1: ДНЕВНИК (ГЛАВНАЯ) -->
+    <div id="tab-home" class="screen active">
+        <h2 id="homeTitle" style="margin-top: 0; margin-bottom: 16px;">Сегодня</h2>
+        
+        <div class="card">
+            <span style="color: var(--text-sec); font-size: 13px;">Потреблено</span>
+            <div style="font-size: 32px; font-weight: 800;"><span id="curCal">0</span> <span style="font-size: 18px; color: var(--text-sec);">/ <span id="maxCal">2100</span> ккал</span></div>
             <div class="progress-container"><div id="pBar" class="progress-fill"></div></div>
             <div class="stats-grid">
                 <div class="stat-item"><span class="stat-val" id="sumP">0г</span><span class="stat-label">Белки</span></div>
@@ -74,27 +70,71 @@
             </div>
         </div>
 
-        <!-- СПИСОК -->
-        <div id="mealListContainer"></div>
+        <h3 style="margin-top: 24px; font-size: 16px;">Приемы пищи</h3>
+        <div id="homeMealList"></div>
 
         <button class="fab" onclick="toggleModal(true)">+</button>
     </div>
 
-    <!-- МОДАЛКА НАСТРОЕК -->
-    <div id="settingsModal" class="modal hidden">
-        <div class="modal-content">
-            <h3>Настройки нормы</h3>
-            <label style="color: var(--text-sec); font-size: 12px;">Дневная цель калорий:</label>
+    <!-- ЭКРАН 2: ИСТОРИЯ -->
+    <div id="tab-history" class="screen">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h2 style="margin: 0;">История</h2>
+            <input type="date" id="historyDate" onchange="renderHistory()" style="width: 150px; margin-bottom: 0; padding: 10px;">
+        </div>
+        
+        <!-- Вывод дня недели -->
+        <h3 id="historyDayLabel" style="color: var(--accent); margin-top: 0; margin-bottom: 16px; font-size: 16px; font-weight: normal;"></h3>
+        
+        <div class="card" id="historyCard" style="margin-top: 16px; display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                <span style="color: var(--text-sec);">Итого за день:</span>
+                <span style="font-size: 24px; font-weight: bold; color: var(--accent);"><span id="histCal">0</span> ккал</span>
+            </div>
+            <div class="stats-grid" style="margin-top: 10px; padding-top: 10px;">
+                <div class="stat-item"><span class="stat-val" id="histP">0г</span></div>
+                <div class="stat-item"><span class="stat-val" id="histF">0г</span></div>
+                <div class="stat-item"><span class="stat-val" id="histC">0г</span></div>
+            </div>
+        </div>
+
+        <div id="historyMealList" style="margin-top: 20px;"></div>
+    </div>
+
+    <!-- ЭКРАН 3: НАСТРОЙКИ -->
+    <div id="tab-settings" class="screen">
+        <h2 style="margin-top: 0; margin-bottom: 16px;">Настройки</h2>
+        
+        <div class="card">
+            <h3 style="margin-top: 0; font-size: 16px;">Твоя цель</h3>
+            <label style="color: var(--text-sec); font-size: 13px; display: block; margin-bottom: 8px;">Суточная норма калорий</label>
             <input type="number" id="setLimit" placeholder="2100">
-            <button class="btn-main" onclick="saveSettings()">Применить</button>
-            <button style="background:none; border:none; color:var(--text-sec); width:100%; margin-top:15px;" onclick="closeSettings()">Отмена</button>
+            <button class="btn-main" onclick="saveSettings()">Сохранить</button>
+        </div>
+        
+        <div class="card">
+            <h3 style="margin-top: 0; font-size: 16px; color: var(--danger);">Управление данными</h3>
+            <button class="btn-main" style="background: transparent; border: 1px solid var(--danger); color: var(--danger);" onclick="clearAllData()">Удалить всю историю</button>
         </div>
     </div>
+
+    <!-- НИЖНЯЯ НАВИГАЦИЯ -->
+    <nav class="bottom-nav">
+        <div class="nav-item active" id="nav-home" onclick="switchTab('home')">
+            <span class="nav-icon">🏠</span> Дневник
+        </div>
+        <div class="nav-item" id="nav-history" onclick="switchTab('history')">
+            <span class="nav-icon">📅</span> История
+        </div>
+        <div class="nav-item" id="nav-settings" onclick="switchTab('settings')">
+            <span class="nav-icon">⚙️</span> Настройки
+        </div>
+    </nav>
 
     <!-- МОДАЛКА ДОБАВЛЕНИЯ -->
     <div id="addModal" class="modal hidden">
         <div class="modal-content">
-            <h3 style="margin-top: 0;">Добавить прием пищи</h3>
+            <h3 style="margin-top: 0;">Добавить еду</h3>
             <input type="text" id="mName" placeholder="Название (например, Гречка)">
             <input type="number" id="mWeight" placeholder="Вес (граммы)">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
@@ -103,8 +143,8 @@
                 <input type="number" id="mC" placeholder="Угл. на 100г">
                 <input type="number" id="mK" placeholder="Ккал на 100г">
             </div>
-            <button class="btn-main" onclick="addEntry()">Добавить в дневник</button>
-            <button style="background:none; border:none; color:var(--text-sec); width:100%; margin-top:15px;" onclick="toggleModal(false)">Закрыть</button>
+            <button class="btn-main" onclick="addEntry()" style="margin-top: 10px;">Сохранить в дневник</button>
+            <button style="background:none; border:none; color:var(--text-sec); width:100%; margin-top:15px; font-size: 16px;" onclick="toggleModal(false)">Закрыть</button>
         </div>
     </div>
 
@@ -112,35 +152,70 @@
         let tg = window.Telegram.WebApp;
         tg.expand();
         tg.headerColor = "#0f1012";
+        tg.backgroundColor = "#0f1012";
 
-        let viewDate = new Date();
         let settings = JSON.parse(localStorage.getItem('fitSettings') || '{"limit": 2100}');
         let db = JSON.parse(localStorage.getItem('fitEntries') || '[]');
+        
+        function getTodayStr() { 
+            const d = new Date();
+            // Смещение для локального времени
+            d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+            return d.toISOString().split('T')[0]; 
+        }
 
-        function formatDate(date) { return date.toISOString().split('T')[0]; }
+        // Функция для красивого вывода даты с днем недели
+        function getFormattedDateInfo(dateStr) {
+            const [y, m, d] = dateStr.split('-');
+            const date = new Date(y, m - 1, d);
+            const options = { weekday: 'long', day: 'numeric', month: 'long' };
+            let str = new Intl.DateTimeFormat('ru-RU', options).format(date);
+            // Делаем первую букву заглавной
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
 
-        function updateUI() {
-            const dateStr = formatDate(viewDate);
-            const isToday = dateStr === formatDate(new Date());
-            document.getElementById('currentDateLabel').innerText = isToday ? "Сегодня" : dateStr;
+        // Установка сегодняшней даты в инпут истории при старте
+        document.getElementById('historyDate').max = getTodayStr();
+        document.getElementById('historyDate').value = getTodayStr();
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             
-            const dayEntries = db.filter(e => e.date === dateStr);
-            let totals = { cal: 0, p: 0, f: 0, c: 0 };
-            let html = '';
+            document.getElementById('tab-' + tabId).classList.add('active');
+            document.getElementById('nav-' + tabId).classList.add('active');
+            
+            if (tabId === 'home') updateHome();
+            if (tabId === 'history') renderHistory();
+            if (tabId === 'settings') document.getElementById('setLimit').value = settings.limit;
+        }
 
-            dayEntries.forEach(e => {
-                totals.cal += e.cal; totals.p += e.p; totals.f += e.f; totals.c += e.c;
+        function generateMealListHTML(entries, isHistory = false) {
+            let html = '';
+            entries.forEach(e => {
+                let delBtn = isHistory ? '' : `<div class="btn-del" onclick="deleteEntry(${e.id})">✕</div>`;
                 html += `
                 <div class="meal-item">
                     <div class="meal-info"><b>${e.name}</b><span>${e.weight}г • БЖУ: ${e.p}/${e.f}/${e.c}</span></div>
                     <div style="display:flex; align-items:center;">
                         <div class="meal-cal">${e.cal}</div>
-                        <div class="btn-del" onclick="deleteEntry(${e.id})">✕</div>
+                        ${delBtn}
                     </div>
                 </div>`;
             });
+            return html || '<p style="text-align:center; color:var(--text-sec); margin-top:20px;">Нет записей</p>';
+        }
 
-            document.getElementById('mealListContainer').innerHTML = html || '<p style="text-align:center; color:gray; margin-top:40px;">Нет записей за этот день</p>';
+        function updateHome() {
+            const todayStr = getTodayStr();
+            const todayEntries = db.filter(e => e.date === todayStr);
+            let totals = { cal: 0, p: 0, f: 0, c: 0 };
+            
+            todayEntries.forEach(e => { totals.cal += e.cal; totals.p += e.p; totals.f += e.f; totals.c += e.c; });
+
+            // Обновляем заголовок с днем недели
+            document.getElementById('homeTitle').innerText = "Сегодня • " + getFormattedDateInfo(todayStr);
+
             document.getElementById('curCal').innerText = totals.cal;
             document.getElementById('maxCal').innerText = settings.limit;
             document.getElementById('sumP').innerText = totals.p + 'г';
@@ -148,27 +223,62 @@
             document.getElementById('sumC').innerText = totals.c + 'г';
             
             const perc = (totals.cal / settings.limit) * 100;
-            document.getElementById('pBar').style.width = Math.min(perc, 100) + '%';
-            document.getElementById('pBar').style.background = perc > 100 ? '#ef4444' : '#2ecc71';
+            const pBar = document.getElementById('pBar');
+            pBar.style.width = Math.min(perc, 100) + '%';
+            pBar.style.background = perc > 100 ? '#ef4444' : '#2ecc71';
+
+            document.getElementById('homeMealList').innerHTML = generateMealListHTML(todayEntries, false);
         }
 
-        function changeDate(days) {
-            viewDate.setDate(viewDate.getDate() + days);
-            updateUI();
+        function renderHistory() {
+            const dateStr = document.getElementById('historyDate').value;
+            if(!dateStr) return;
+
+            // Выводим день недели
+            document.getElementById('historyDayLabel').innerText = getFormattedDateInfo(dateStr);
+
+            const entries = db.filter(e => e.date === dateStr);
+            const histCard = document.getElementById('historyCard');
+            
+            if (entries.length === 0) {
+                histCard.style.display = 'none';
+                document.getElementById('historyMealList').innerHTML = '<p style="text-align:center; color:var(--text-sec); margin-top:40px;">В этот день нет записей 🍃</p>';
+                return;
+            }
+
+            histCard.style.display = 'block';
+            let totals = { cal: 0, p: 0, f: 0, c: 0 };
+            entries.forEach(e => { totals.cal += e.cal; totals.p += e.p; totals.f += e.f; totals.c += e.c; });
+
+            document.getElementById('histCal').innerText = totals.cal;
+            document.getElementById('histP').innerText = totals.p + 'г Б';
+            document.getElementById('histF').innerText = totals.f + 'г Ж';
+            document.getElementById('histC').innerText = totals.c + 'г У';
+            
+            document.getElementById('historyMealList').innerHTML = generateMealListHTML(entries, true);
         }
 
         function toggleModal(show) { document.getElementById('addModal').classList.toggle('hidden', !show); }
-        function openSettings() { document.getElementById('settingsModal').classList.remove('hidden'); }
-        function closeSettings() { document.getElementById('settingsModal').classList.add('hidden'); }
 
         function saveSettings() {
             const val = parseInt(document.getElementById('setLimit').value);
             if(val > 0) {
                 settings.limit = val;
                 localStorage.setItem('fitSettings', JSON.stringify(settings));
-                closeSettings();
-                updateUI();
+                updateHome();
+                tg.showAlert("Настройки успешно сохранены!");
             }
+        }
+
+        function clearAllData() {
+            tg.showConfirm("Удалить всю историю питания безвозвратно?", (ok) => {
+                if (ok) {
+                    db = [];
+                    localStorage.removeItem('fitEntries');
+                    updateHome();
+                    renderHistory();
+                }
+            });
         }
 
         function addEntry() {
@@ -176,11 +286,11 @@
             const w = parseFloat(document.getElementById('mWeight').value);
             const k100 = parseFloat(document.getElementById('mK').value);
             
-            if(!name || !w || !k100) return alert("Заполни название, вес и ккал!");
+            if(!name || !w || !k100) return tg.showAlert("Заполни название, вес и ккал!");
 
             const entry = {
                 id: Date.now(),
-                date: formatDate(viewDate),
+                date: getTodayStr(),
                 name: name,
                 weight: w,
                 p: Math.round((parseFloat(document.getElementById('mP').value || 0) * w) / 100),
@@ -189,22 +299,16 @@
                 cal: Math.round((k100 * w) / 100)
             };
 
-            db.push(entry);
+            db.unshift(entry);
             localStorage.setItem('fitEntries', JSON.stringify(db));
-            toggleModal(false);
-            updateUI();
             
-            // Очистка полей
             ['mName','mWeight','mP','mF','mC','mK'].forEach(id => document.getElementById(id).value = '');
+            toggleModal(false);
+            updateHome();
         }
 
-        function deleteEntry(id) {
-            db = db.filter(e => e.id !== id);
-            localStorage.setItem('fitEntries', JSON.stringify(db));
-            updateUI();
-        }
-
-        updateUI();
+        // Инициализация
+        updateHome();
     </script>
 </body>
 </html>
