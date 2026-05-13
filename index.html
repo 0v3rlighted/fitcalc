@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <!-- Отключаем зум, чтобы приложение ощущалось как нативное -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FitCalc</title>
+    <!-- Подключаем скрипт Telegram -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        /* Темная тема, похожая на наш Android-вариант */
+        :root {
+            --bg: #121212;
+            --card: #1E1E1E;
+            --accent: #4CAF50;
+            --text: #ffffff;
+            --text-sec: #aaaaaa;
+        }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: sans-serif;
+            margin: 0;
+            padding: 16px;
+        }
+        .hidden { display: none !important; }
+        
+        input {
+            width: 100%; padding: 14px; margin-bottom: 12px;
+            background: var(--card); border: 1px solid #333;
+            color: white; border-radius: 12px; box-sizing: border-box;
+            font-size: 16px;
+        }
+        button {
+            width: 100%; padding: 16px; background: var(--accent);
+            color: white; border: none; border-radius: 12px;
+            font-size: 16px; font-weight: bold; cursor: pointer;
+        }
+        .card {
+            background: var(--card); padding: 20px;
+            border-radius: 16px; margin-bottom: 16px;
+        }
+        .meal-row {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid #333; padding: 12px 0;
+        }
+        .meal-row:last-child { border-bottom: none; }
+        .del-btn { background: transparent; color: #ff4444; width: auto; padding: 4px 8px; font-size: 20px; }
+        
+        /* Модальное окно для добавления еды */
+        #addModal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: flex;
+            align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-content { background: var(--bg); padding: 20px; border-radius: 16px; width: 90%; max-width: 400px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    </style>
+</head>
+<body>
+
+    <!-- ЭКРАН 1: Приветствие -->
+    <div id="settingsScreen">
+        <h1 style="text-align: center; margin-top: 50px;">Привет! 👋</h1>
+        <p style="text-align: center; color: var(--text-sec); margin-bottom: 32px;">Давай настроим твой рацион</p>
+        <input type="number" id="targetCal" placeholder="Ккал в день">
+        <button onclick="saveSettings()">Начать работу</button>
+    </div>
+
+    <!-- ЭКРАН 2: Главный (Дневник) -->
+    <div id="mainScreen" class="hidden">
+        <h2 id="todayDate" style="margin-top: 0;">Сегодня:</h2>
+        
+        <div class="card">
+            <div style="font-size: 14px; color: var(--text-sec);">Съедено / Норма</div>
+            <div style="font-size: 28px; font-weight: bold; margin-bottom: 12px;">
+                <span id="consumedCal">0</span> / <span id="totalCalSpan">0</span> Ккал
+            </div>
+            <div style="background: #333; height: 8px; border-radius: 4px;">
+                <div id="progressBar" style="background: var(--accent); height: 100%; width: 0%; border-radius: 4px; transition: width 0.3s;"></div>
+            </div>
+            
+            <!-- Панель БЖУ -->
+            <div style="display: flex; justify-content: space-between; margin-top: 20px; text-align: center;">
+                <div><b id="totalP" style="font-size: 18px;">0г</b><br><small style="color: var(--text-sec);">Белки</small></div>
+                <div><b id="totalF" style="font-size: 18px;">0г</b><br><small style="color: var(--text-sec);">Жиры</small></div>
+                <div><b id="totalC" style="font-size: 18px;">0г</b><br><small style="color: var(--text-sec);">Углеводы</small></div>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 24px;">Твои блюда:</h3>
+        <div class="card" id="mealsList">
+            <!-- Сюда JS будет вставлять еду -->
+        </div>
+        
+        <!-- Плавающая кнопка плюса -->
+        <button onclick="openModal()" style="position: fixed; bottom: 24px; right: 24px; width: 60px; height: 60px; border-radius: 30px; padding: 0; font-size: 30px; box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);">+</button>
+    </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО: Калькулятор еды -->
+    <div id="addModal" class="hidden">
+        <div class="modal-content">
+            <h3 style="margin-top: 0;">Добавить блюдо</h3>
+            <input type="text" id="mName" placeholder="Название">
+            <input type="number" id="mWeight" placeholder="Вес порции (в граммах)">
+            
+            <p style="color: var(--text-sec); font-size: 14px; margin-bottom: 8px;">Пищевая ценность на 100г:</p>
+            <div class="grid-2">
+                <input type="number" id="mCal" placeholder="Ккал">
+                <input type="number" id="mP" placeholder="Белки">
+                <input type="number" id="mF" placeholder="Жиры">
+                <input type="number" id="mC" placeholder="Углеводы">
+            </div>
+            
+            <button onclick="addMeal()" style="margin-bottom: 12px; margin-top: 8px;">Добавить</button>
+            <button onclick="closeModal()" style="background: transparent; color: var(--text-sec);">Отмена</button>
+        </div>
+    </div>
+
+    <!-- ЛОГИКА ПРИЛОЖЕНИЯ (Замена ViewModel) -->
+    <script>
+        // Инициализация Telegram Web App
+        let tg = window.Telegram.WebApp;
+        tg.expand(); // Разворачиваем на весь экран
+
+        // Достаем данные из кэша Telegram
+        let targetCal = localStorage.getItem('targetCal') || 0;
+        let meals = JSON.parse(localStorage.getItem('meals') || '[]');
+        
+        function getTodayId() {
+            let d = new Date();
+            return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        }
+
+        function init() {
+            if (targetCal > 0) {
+                document.getElementById('settingsScreen').classList.add('hidden');
+                document.getElementById('mainScreen').classList.remove('hidden');
+                renderMain();
+            }
+        }
+
+        function saveSettings() {
+            let val = parseInt(document.getElementById('targetCal').value);
+            if (val > 0) {
+                targetCal = val;
+                localStorage.setItem('targetCal', val);
+                init();
+            }
+        }
+
+        function renderMain() {
+            let d = new Date();
+            let days = ['ВС', 'ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ'];
+            let months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+            
+            let displayDay = days[d.getDay()];
+            let displayDate = `${d.getDate() < 10 ? '0'+d.getDate() : d.getDate()}.${months[d.getMonth()]}`;
+            document.getElementById('todayDate').innerText = `Сегодня: ${displayDay}, ${displayDate}`;
+            
+            let todayId = getTodayId();
+            let todayMeals = meals.filter(m => m.dateId === todayId);
+            
+            let consumed = 0, p = 0, f = 0, c = 0;
+            let html = '';
+            
+            if(todayMeals.length === 0) {
+                html = '<div style="color: var(--text-sec); text-align: center; padding: 10px;">Пока ничего не добавлено 🍽️</div>';
+            } else {
+                todayMeals.forEach((m) => {
+                    consumed += m.cal; p += m.p; f += m.f; c += m.c;
+                    html += `
+                    <div class="meal-row">
+                        <div style="flex: 1; overflow: hidden; padding-right: 8px;">
+                            <div style="font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${m.name}</div>
+                            <div style="font-size: 12px; color: var(--text-sec);">Б:${m.p} Ж:${m.f} У:${m.c}</div>
+                        </div>
+                        <div style="color: var(--accent); font-weight: bold; margin-right: 12px; white-space: nowrap;">${m.cal} ккал</div>
+                        <button class="del-btn" onclick="deleteMeal(${m.id})">🗑️</button>
+                    </div>`;
+                });
+            }
+            
+            document.getElementById('mealsList').innerHTML = html;
+            document.getElementById('consumedCal').innerText = consumed;
+            document.getElementById('totalCalSpan').innerText = targetCal;
+            document.getElementById('totalP').innerText = p + 'г';
+            document.getElementById('totalF').innerText = f + 'г';
+            document.getElementById('totalC').innerText = c + 'г';
+            
+            let percent = (consumed / targetCal) * 100;
+            if(percent > 100) percent = 100;
+            document.getElementById('progressBar').style.width = percent + '%';
+        }
+
+        function openModal() { document.getElementById('addModal').classList.remove('hidden'); }
+        function closeModal() { document.getElementById('addModal').classList.add('hidden'); }
+
+        function addMeal() {
+            let name = document.getElementById('mName').value;
+            let w = parseFloat(document.getElementById('mWeight').value) || 0;
+            let cal100 = parseFloat(document.getElementById('mCal').value) || 0;
+            let p100 = parseFloat(document.getElementById('mP').value) || 0;
+            let f100 = parseFloat(document.getElementById('mF').value) || 0;
+            let c100 = parseFloat(document.getElementById('mC').value) || 0;
+
+            if (name && w > 0 && cal100 > 0) {
+                let newMeal = {
+                    id: Date.now(),
+                    name: name,
+                    dateId: getTodayId(),
+                    cal: Math.round((cal100 * w) / 100),
+                    p: Math.round((p100 * w) / 100),
+                    f: Math.round((f100 * w) / 100),
+                    c: Math.round((c100 * w) / 100)
+                };
+                meals.push(newMeal);
+                localStorage.setItem('meals', JSON.stringify(meals));
+                
+                // Очищаем поля
+                document.getElementById('mName').value = '';
+                document.getElementById('mWeight').value = '';
+                document.getElementById('mCal').value = '';
+                document.getElementById('mP').value = '';
+                document.getElementById('mF').value = '';
+                document.getElementById('mC').value = '';
+                
+                closeModal();
+                renderMain();
+                tg.HapticFeedback.impactOccurred('light'); // Вибрация при добавлении
+            }
+        }
+
+        function deleteMeal(id) {
+            meals = meals.filter(m => m.id !== id);
+            localStorage.setItem('meals', JSON.stringify(meals));
+            renderMain();
+            tg.HapticFeedback.impactOccurred('light');
+        }
+
+        init();
+    </script>
+</body>
+</html>
